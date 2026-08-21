@@ -1,0 +1,32 @@
+server:
+  port: 9090
+
+spring:
+  application:
+    name: ewm-stats-service
+  datasource:
+    url: jdbc:postgresql://${STATS_DB_HOST:localhost}:${STATS_DB_PORT:5432}/${STATS_DB_NAME:stats}
+    username: ${STATS_DB_USER:stats}
+    password: ${STATS_DB_PASSWORD:stats}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+    show-sql: false
+  sql:
+    init:
+      mode: always
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    ru.practicum: debug
