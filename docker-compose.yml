@@ -1,14 +1,67 @@
 services:
   stats-server:
+    build: ewm-stats-service/stats-server
+    image: ewm-stats-server
+    container_name: ewm-stats-server
     ports:
       - "9090:9090"
+    depends_on:
+      stats-db:
+        condition: service_healthy
+    environment:
+      - STATS_DB_HOST=stats-db
+      - STATS_DB_PORT=5432
+      - STATS_DB_NAME=stats
+      - STATS_DB_USER=stats
+      - STATS_DB_PASSWORD=stats
 
   stats-db:
     image: postgres:16.1
+    container_name: ewm-stats-db
+    ports:
+      - "6541:5432"
+    environment:
+      - POSTGRES_DB=stats
+      - POSTGRES_USER=stats
+      - POSTGRES_PASSWORD=stats
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U stats -d stats" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
+  # ewm-service и ewm-db будут дособраны на этапе 2 —
+  # сейчас у ewm-service только заглушка pom.xml без Application-класса.
   ewm-service:
+    build: ewm-service
+    image: ewm-main-service
+    container_name: ewm-main-service
     ports:
       - "8080:8080"
+    depends_on:
+      ewm-db:
+        condition: service_healthy
+      stats-server:
+        condition: service_started
+    environment:
+      - EWM_DB_HOST=ewm-db
+      - EWM_DB_PORT=5432
+      - EWM_DB_NAME=ewm
+      - EWM_DB_USER=ewm
+      - EWM_DB_PASSWORD=ewm
+      - STATS_SERVER_URL=http://stats-server:9090
 
   ewm-db:
     image: postgres:16.1
+    container_name: ewm-main-db
+    ports:
+      - "6542:5432"
+    environment:
+      - POSTGRES_DB=ewm
+      - POSTGRES_USER=ewm
+      - POSTGRES_PASSWORD=ewm
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ewm -d ewm" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
