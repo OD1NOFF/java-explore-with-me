@@ -1,6 +1,5 @@
 package ru.practicum.client;
 
-import java.net.URI;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
@@ -10,14 +9,17 @@ import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
 import ru.practicum.dto.EndpointHitDto;
 import ru.practicum.dto.ViewStatsDto;
 
+/**
+ * Тонкий HTTP-клиент сервиса статистики: отправляет "хиты" по эндпоинтам
+ * и запрашивает агрегированную статистику просмотров.
+ */
 @Slf4j
-@Component
+@Service
 public class StatsClient {
 
     private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -48,18 +50,13 @@ public class StatsClient {
         params.put("end", end.format(TIMESTAMP_FORMATTER));
         params.put("unique", unique);
 
-        UriComponentsBuilder uriBuilder = UriComponentsBuilder.fromPath("/stats")
-                .queryParam("start", "{start}")
-                .queryParam("end", "{end}")
-                .queryParam("unique", "{unique}");
-
+        StringBuilder path = new StringBuilder("/stats?start={start}&end={end}&unique={unique}");
         if (uris != null && !uris.isEmpty()) {
-            uriBuilder.queryParam("uris", "{uris}");
+            path.append("&uris={uris}");
             params.put("uris", String.join(",", uris));
         }
 
-        URI uri = uriBuilder.encode().buildAndExpand(params).toUri();
-        ViewStatsDto[] result = restTemplate.getForObject(uri, ViewStatsDto[].class);
+       ViewStatsDto[] result = restTemplate.getForObject(path.toString(), ViewStatsDto[].class, params);
         return result == null ? List.of() : Arrays.asList(result);
     }
 }
