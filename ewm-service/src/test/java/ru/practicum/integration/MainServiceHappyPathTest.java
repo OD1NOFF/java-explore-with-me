@@ -194,7 +194,7 @@ class MainServiceHappyPathTest {
         mockMvc.perform(post("/users/{userId}/events", initiatorId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(tooSoonEvent)))
-                .andExpect(status().isConflict());
+                .andExpect(status().isBadRequest());
 
         // Владелец может посмотреть свои события и конкретное событие
         mockMvc.perform(get("/users/{userId}/events", initiatorId))
