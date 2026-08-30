@@ -135,6 +135,7 @@ class MainServiceHappyPathTest {
 
     @Test
     void categoriesCompilationsAndErrorPaths() throws Exception {
+        // Категория: создать -> получить список -> получить по id -> изменить -> удалить
         NewCategoryDto newCategory = NewCategoryDto.builder().name("Театр").build();
         String categoryResponse = mockMvc.perform(post("/admin/categories")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -155,9 +156,11 @@ class MainServiceHappyPathTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Театр и опера"));
 
+        // 404: несуществующая категория
         mockMvc.perform(get("/categories/{catId}", 999_999))
                 .andExpect(status().isNotFound());
 
+        // Событие в этой категории, чтобы проверить 409 при удалении непустой категории
         Long initiatorId = createUser("Организатор2", "organizer2@example.com");
         String eventDate = LocalDateTime.now().plusHours(3).format(FMT);
         NewEventDto newEvent = NewEventDto.builder()
@@ -175,9 +178,11 @@ class MainServiceHappyPathTest {
                 .andReturn().getResponse().getContentAsString();
         Long eventId = objectMapper.readTree(eventResponse).get("id").asLong();
 
+        // 409: категория не пуста
         mockMvc.perform(delete("/admin/categories/{catId}", categoryId))
                 .andExpect(status().isConflict());
 
+        // 409: слишком ранняя дата события (ValidationException-путь через ConflictException)
         NewEventDto tooSoonEvent = NewEventDto.builder()
                 .title("Слишком скорый спектакль")
                 .annotation("Аннотация события должна быть не короче двадцати символов")
@@ -191,12 +196,14 @@ class MainServiceHappyPathTest {
                         .content(objectMapper.writeValueAsString(tooSoonEvent)))
                 .andExpect(status().isConflict());
 
+        // Владелец может посмотреть свои события и конкретное событие
         mockMvc.perform(get("/users/{userId}/events", initiatorId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)));
         mockMvc.perform(get("/users/{userId}/events/{eventId}", initiatorId, eventId))
                 .andExpect(status().isOk());
 
+        // Публикуем и сразу пробуем отклонить уже опубликованное -> 409
         mockMvc.perform(patch("/admin/events/{eventId}", eventId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"stateAction\":\"PUBLISH_EVENT\"}"))
@@ -206,15 +213,18 @@ class MainServiceHappyPathTest {
                         .content("{\"stateAction\":\"REJECT_EVENT\"}"))
                 .andExpect(status().isConflict());
 
+        // Админский поиск событий с фильтрами
         mockMvc.perform(get("/admin/events").param("categories", String.valueOf(categoryId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)));
 
+        // Публичный поиск с невалидным диапазоном дат -> 400 (ValidationException)
         mockMvc.perform(get("/events")
                         .param("rangeStart", "2030-01-01 00:00:00")
                         .param("rangeEnd", "2020-01-01 00:00:00"))
                 .andExpect(status().isBadRequest());
 
+        // Подборка: создать с событием -> список (pinned/не pinned) -> по id -> изменить -> удалить
         String newCompilation = "{\"title\":\"Премьеры сезона\",\"pinned\":true,\"events\":[" + eventId + "]}";
         String compResponse = mockMvc.perform(post("/admin/compilations")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -244,6 +254,9 @@ class MainServiceHappyPathTest {
         mockMvc.perform(get("/compilations/{compId}", compId))
                 .andExpect(status().isNotFound());
 
+        // Пользователи: список с фильтром по id и удаление (берём отдельного,
+        // ничем не занятого пользователя — у initiatorId уже есть событие,
+        // и его удаление упёрлось бы в FK-ограничение, а не в бизнес-логику)
         Long throwawayUserId = createUser("Одноразовый", "throwaway@example.com");
         mockMvc.perform(get("/admin/users").param("ids", String.valueOf(throwawayUserId)))
                 .andExpect(status().isOk())

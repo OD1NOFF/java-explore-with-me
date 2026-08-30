@@ -21,6 +21,7 @@ import ru.practicum.event.repository.EventRepository;
 import ru.practicum.event.repository.EventSpecifications;
 import ru.practicum.exception.ConflictException;
 import ru.practicum.exception.NotFoundException;
+import ru.practicum.exception.ValidationException;
 import ru.practicum.util.AppConstants;
 import ru.practicum.util.OffsetPageRequest;
 
@@ -64,7 +65,12 @@ public class AdminEventServiceImpl implements AdminEventService {
                 .orElseThrow(() -> new NotFoundException("Event with id=" + eventId + " was not found"));
 
         if (dto.getEventDate() != null) {
-            event.setEventDate(LocalDateTime.parse(dto.getEventDate(), AppConstants.DATE_TIME_FORMATTER));
+            LocalDateTime newEventDate = LocalDateTime.parse(dto.getEventDate(), AppConstants.DATE_TIME_FORMATTER);
+            if (newEventDate.isBefore(LocalDateTime.now())) {
+                throw new ValidationException("Field: eventDate. Error: должно содержать дату, которая еще не "
+                        + "наступила. Value: " + dto.getEventDate());
+            }
+            event.setEventDate(newEventDate);
         }
         if (dto.getAnnotation() != null) {
             event.setAnnotation(dto.getAnnotation());

@@ -20,6 +20,7 @@ import ru.practicum.event.model.Location;
 import ru.practicum.event.repository.EventRepository;
 import ru.practicum.exception.ConflictException;
 import ru.practicum.exception.NotFoundException;
+import ru.practicum.exception.ValidationException;
 import ru.practicum.user.model.User;
 import ru.practicum.user.repository.UserRepository;
 import ru.practicum.util.AppConstants;
@@ -131,7 +132,7 @@ public class PrivateEventServiceImpl implements PrivateEventService {
 
     private void validateEventDate(LocalDateTime eventDate, int minHours, String rawValue) {
         if (eventDate.isBefore(LocalDateTime.now().plusHours(minHours))) {
-            throw new ConflictException("Field: eventDate. Error: должно содержать дату, которая еще не наступила. "
+            throw new ValidationException("Field: eventDate. Error: должно содержать дату, которая еще не наступила. "
                     + "Value: " + rawValue);
         }
     }
