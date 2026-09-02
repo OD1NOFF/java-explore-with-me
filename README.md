@@ -6,4 +6,4 @@ Template repository for ExploreWithMe project.
 Локации (поиск событий в радиусе точки интереса) — см. [LOCATIONS.md](./LOCATIONS.md).
 
 ## Ссылка на пулл-реквест 
-[сиксевен](https://github.com/OD1NOFF/java-explore-with-me/pull/5)
+[сиксевен](https://github.com/OD1NOFF/java-explore-with-me/pull/6)
