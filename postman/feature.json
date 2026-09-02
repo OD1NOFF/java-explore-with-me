@@ -1,0 +1,197 @@
+{
+  "info": {
+    "name": "EWM feature: location_processing",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" }
+  ],
+  "item": [
+    {
+      "name": "0. New run (resets runId)",
+      "request": { "method": "GET", "url": "{{baseUrl}}/actuator/health" },
+      "event": [{
+        "listen": "prerequest",
+        "script": { "exec": ["pm.collectionVariables.set('runId', Date.now());"] }
+      }]
+    },
+    {
+      "name": "1. Admin: add location -> 201",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/admin/locations",
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Большой театр {{runId}}\",\n  \"lat\": 55.7601,\n  \"lon\": 37.6186,\n  \"radius\": 5\n}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 201', () => pm.response.to.have.status(201));",
+        "const body = pm.response.json();",
+        "pm.test('has id and matches input', () => {",
+        "  pm.expect(body.id).to.be.a('number');",
+        "  pm.expect(body.radius).to.eql(5);",
+        "});",
+        "pm.collectionVariables.set('locationId', body.id);"
+      ] } }]
+    },
+    {
+      "name": "2. Admin: negative radius -> 400",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/admin/locations",
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Плохая локация\",\n  \"lat\": 0,\n  \"lon\": 0,\n  \"radius\": -1\n}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 400', () => pm.response.to.have.status(400));"
+      ] } }]
+    },
+    {
+      "name": "3. Public: get locations list -> contains ours",
+      "request": { "method": "GET", "url": "{{baseUrl}}/locations" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 200', () => pm.response.to.have.status(200));",
+        "const body = pm.response.json();",
+        "const id = pm.collectionVariables.get('locationId');",
+        "pm.test('contains our location', () => pm.expect(body.some(l => l.id === id)).to.be.true);"
+      ] } }]
+    },
+    {
+      "name": "4. Public: get location by id",
+      "request": { "method": "GET", "url": "{{baseUrl}}/locations/{{locationId}}" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 200', () => pm.response.to.have.status(200));",
+        "pm.test('name matches', () => pm.expect(pm.response.json().name).to.include('Большой театр'));"
+      ] } }]
+    },
+    {
+      "name": "5. Public: get unknown location -> 404",
+      "request": { "method": "GET", "url": "{{baseUrl}}/locations/999999999" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 404', () => pm.response.to.have.status(404));"
+      ] } }]
+    },
+    {
+      "name": "6. Admin: update radius",
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/admin/locations/{{locationId}}",
+        "body": { "mode": "raw", "raw": "{\"radius\": 10}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 200', () => pm.response.to.have.status(200));",
+        "pm.test('radius updated', () => pm.expect(pm.response.json().radius).to.eql(10));",
+        "pm.test('name unchanged', () => pm.expect(pm.response.json().name).to.include('Большой театр'));"
+      ] } }]
+    },
+    {
+      "name": "7. Setup: create user for events",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/admin/users",
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Organizer {{runId}}\",\n  \"email\": \"loc-organizer{{runId}}@example.com\"\n}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 201', () => pm.response.to.have.status(201));",
+        "pm.collectionVariables.set('userId', pm.response.json().id);"
+      ] } }]
+    },
+    {
+      "name": "8. Setup: create category",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/admin/categories",
+        "body": { "mode": "raw", "raw": "{\"name\": \"Спектакли {{runId}}\"}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 201', () => pm.response.to.have.status(201));",
+        "pm.collectionVariables.set('categoryId', pm.response.json().id);"
+      ] } }]
+    },
+    {
+      "name": "9. Setup: create + publish event INSIDE radius (~1km from location)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/users/{{userId}}/events",
+        "body": { "mode": "raw", "raw": "{\n  \"title\": \"Спектакль рядом {{runId}}\",\n  \"annotation\": \"Аннотация события должна быть не короче двадцати символов\",\n  \"description\": \"Подробное описание события тоже должно быть не короче двадцати символов\",\n  \"category\": {{categoryId}},\n  \"eventDate\": \"2027-06-01 19:00:00\",\n  \"location\": {\"lat\": 55.7650, \"lon\": 37.6200},\n  \"paid\": false,\n  \"participantLimit\": 0,\n  \"requestModeration\": false\n}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 201', () => pm.response.to.have.status(201));",
+        "pm.collectionVariables.set('nearEventId', pm.response.json().id);"
+      ] } }]
+    },
+    {
+      "name": "10. Admin: publish near event",
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/admin/events/{{nearEventId}}",
+        "body": { "mode": "raw", "raw": "{\"stateAction\": \"PUBLISH_EVENT\"}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 200', () => pm.response.to.have.status(200));"
+      ] } }]
+    },
+    {
+      "name": "11. Setup: create + publish event FAR from location (~1000km away)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/users/{{userId}}/events",
+        "body": { "mode": "raw", "raw": "{\n  \"title\": \"Спектакль далеко {{runId}}\",\n  \"annotation\": \"Аннотация события должна быть не короче двадцати символов\",\n  \"description\": \"Подробное описание события тоже должно быть не короче двадцати символов\",\n  \"category\": {{categoryId}},\n  \"eventDate\": \"2027-06-01 19:00:00\",\n  \"location\": {\"lat\": 48.8566, \"lon\": 2.3522},\n  \"paid\": false,\n  \"participantLimit\": 0,\n  \"requestModeration\": false\n}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 201', () => pm.response.to.have.status(201));",
+        "pm.collectionVariables.set('farEventId', pm.response.json().id);"
+      ] } }]
+    },
+    {
+      "name": "12. Admin: publish far event",
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/admin/events/{{farEventId}}",
+        "body": { "mode": "raw", "raw": "{\"stateAction\": \"PUBLISH_EVENT\"}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 200', () => pm.response.to.have.status(200));"
+      ] } }]
+    },
+    {
+      "name": "13. Public: events in location -> near event yes, far event no",
+      "request": { "method": "GET", "url": "{{baseUrl}}/locations/{{locationId}}/events" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 200', () => pm.response.to.have.status(200));",
+        "const body = pm.response.json();",
+        "const nearId = pm.collectionVariables.get('nearEventId');",
+        "const farId = pm.collectionVariables.get('farEventId');",
+        "pm.test('near event is included', () => pm.expect(body.some(e => e.id === nearId)).to.be.true);",
+        "pm.test('far event is excluded', () => pm.expect(body.some(e => e.id === farId)).to.be.false);"
+      ] } }]
+    },
+    {
+      "name": "14. Admin: delete location -> 204",
+      "request": { "method": "DELETE", "url": "{{baseUrl}}/admin/locations/{{locationId}}" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 204', () => pm.response.to.have.status(204));"
+      ] } }]
+    },
+    {
+      "name": "15. Public: get deleted location -> 404",
+      "request": { "method": "GET", "url": "{{baseUrl}}/locations/{{locationId}}" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 404', () => pm.response.to.have.status(404));"
+      ] } }]
+    },
+    {
+      "name": "16. Public: events for deleted location -> 404",
+      "request": { "method": "GET", "url": "{{baseUrl}}/locations/{{locationId}}/events" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 404', () => pm.response.to.have.status(404));"
+      ] } }]
+    }
+  ]
+}
