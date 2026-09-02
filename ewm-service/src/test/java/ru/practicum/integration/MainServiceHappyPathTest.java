@@ -182,7 +182,7 @@ class MainServiceHappyPathTest {
         mockMvc.perform(delete("/admin/categories/{catId}", categoryId))
                 .andExpect(status().isConflict());
 
-        // 409: слишком ранняя дата события (ValidationException-путь через ConflictException)
+        // 400: слишком ранняя дата события (ValidationException)
         NewEventDto tooSoonEvent = NewEventDto.builder()
                 .title("Слишком скорый спектакль")
                 .annotation("Аннотация события должна быть не короче двадцати символов")
@@ -265,6 +265,52 @@ class MainServiceHappyPathTest {
                 .andExpect(status().isNoContent());
         mockMvc.perform(delete("/admin/users/{userId}", throwawayUserId))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void locationCrud() throws Exception {
+        // Создать -> список -> по id -> изменить -> удалить -> 404 после удаления
+        String newLocation = "{\"name\":\"Большой театр\",\"lat\":55.7601,\"lon\":37.6186,\"radius\":0.5}";
+        String createResponse = mockMvc.perform(post("/admin/locations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(newLocation))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.name").value("Большой театр"))
+                .andReturn().getResponse().getContentAsString();
+        Long locationId = objectMapper.readTree(createResponse).get("id").asLong();
+
+        mockMvc.perform(get("/locations"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)));
+        mockMvc.perform(get("/locations/{id}", locationId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.radius").value(0.5));
+
+        mockMvc.perform(patch("/admin/locations/{id}", locationId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"radius\":1.5}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.radius").value(1.5))
+                .andExpect(jsonPath("$.name").value("Большой театр"));
+
+        // 400: неположительный радиус не проходит валидацию
+        mockMvc.perform(post("/admin/locations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Плохая локация\",\"lat\":0,\"lon\":0,\"radius\":-1}"))
+                .andExpect(status().isBadRequest());
+
+        // 404: несуществующая локация
+        mockMvc.perform(get("/locations/{id}", 999_999))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(delete("/admin/locations/{id}", locationId))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(get("/locations/{id}", locationId))
+                .andExpect(status().isNotFound());
+
+        // Поиск событий в радиусе локации использует PL/pgSQL-функцию distance(),
+        // которой в тестовом H2-профиле намеренно нет (см. application-test.yml) —
+        // этот эндпоинт проверяется Postman-коллекцией против настоящего Postgres.
     }
 
     private Long createUser(String name, String email) throws Exception {

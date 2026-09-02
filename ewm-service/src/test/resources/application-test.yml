@@ -11,6 +11,11 @@ spring:
   sql:
     init:
       mode: always
+      # только портируемая часть схемы — PL/pgSQL функция distance() из
+      # schema-postgres.sql на H2 не выполнится, поиск событий в радиусе
+      # локации проверяется Postman-коллекцией, не этим профилем
+      schema-locations:
+        - classpath:schema.sql
 
 stats-server:
   url: http://localhost:9090
