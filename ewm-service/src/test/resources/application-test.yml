@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:ewm;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+  sql:
+    init:
+      mode: always
+
+stats-server:
+  url: http://localhost:9090
