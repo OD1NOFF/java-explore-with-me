@@ -20,6 +20,9 @@ spring:
   sql:
     init:
       mode: always
+      schema-locations:
+        - classpath:schema.sql
+        - classpath:schema-postgres.sql
 
 stats-server:
   url: ${STATS_SERVER_URL:http://localhost:9090}
